@@ -31,7 +31,7 @@ public enum PlayerState
 public class Movement : MonoBehaviour
 {
     // Use this to check the state
-    private PlayerState currentState = PlayerState.IDLE;
+    public PlayerState currentState = PlayerState.IDLE;
 
     // Custom collision script
     private Collision coll;
@@ -131,45 +131,6 @@ public class Movement : MonoBehaviour
             wallSlide = false;
         }
 
-        // When on the ground and not dashing
-        // You might want to move these to a state
-        if (coll.onGround && !isDashing)
-        {
-            wallJumped = false;
-            GetComponent<BetterJumping>().enabled = true;
-        }
-        
-        // Old Climbing code
-        if (wallGrab && !isDashing)
-        {
-            // All this movement code is now in the CLIMBING state
-        }
-        else
-        {
-            // Moved this to the leave condition in the CLIMBING state
-            //rb.gravityScale = 3;
-        }
-
-        // When on the wall and not on the gorund
-        if(coll.onWall && !coll.onGround)
-        {
-            // If the player is moving towards the wall
-            if (xInput != 0 && !wallGrab)
-            {   
-                // Slide down the wall
-                wallSlide = true;
-                WallSlide();
-            }
-
-            // Maybe there could be an ON_WALL state?
-            // Try it out!
-        }
-
-        // If not on the wall and on the ground
-        // Maybe move this to IDLE? 
-        if (!coll.onWall || coll.onGround)
-            wallSlide = false;
-
         // If left click and if dash is not on cooldown
         if (Input.GetButtonDown("Fire1") && !hasDashed)
         {
@@ -179,6 +140,7 @@ public class Movement : MonoBehaviour
                 // Dash using raw input values
                 Dash(xRaw, yRaw);
         }
+        
 
         // When you land on the ground
         if (coll.onGround && !groundTouch)
@@ -187,7 +149,7 @@ public class Movement : MonoBehaviour
             GroundTouch();
             groundTouch = true;
         }
-
+        
         // When you have left the ground
         if(!coll.onGround && groundTouch)
         {
@@ -224,19 +186,34 @@ public class Movement : MonoBehaviour
         {
             case PlayerState.IDLE:
 
+                wallSlide = false;
+
+                // When on the ground and not dashing reset a few values
+                if (coll.onGround)
+                {
+                    wallJumped = false;
+                    GetComponent<BetterJumping>().enabled = true;
+                }
+
                 // Condition: Horizontal input, go to RUNNING state
-                if(xInput > 0.01f || xInput < -0.01f)
+                if (xInput > 0.01f || xInput < -0.01f)
                 {
                     SetState(PlayerState.RUNNING);
                 }
 
-                // Condition: Wants to jump and is on ground, goto JUMPING state
+                // Condition: Player wants to jump and is on ground, go to JUMPING state
                 if (coll.onGround && jumpInput)
                     SetState(PlayerState.JUMPING);
+
+                // Condition: Player is on wall and not the ground, go to ON_WALL state
+                if (coll.onWall && !coll.onGround)
+                    SetState(PlayerState.ON_WALL);
 
             break;
 
             case PlayerState.RUNNING:
+
+                wallSlide = false;
 
                 // Use input direction to move and change the animation
                 Walk(inputDirection);
@@ -250,6 +227,10 @@ public class Movement : MonoBehaviour
 
                 if (coll.onGround && jumpInput)
                     SetState(PlayerState.JUMPING);
+                
+                if (coll.onWall && !coll.onGround)
+                    SetState(PlayerState.ON_WALL);
+
                 break;
             
             case PlayerState.CLIMBING:
@@ -276,8 +257,37 @@ public class Movement : MonoBehaviour
                     // Reset Gravity
                     rb.gravityScale = 3;
                 }
-        
-            break;
+
+                // Wall jumping code was going to be added here too, but the player would immediately re-attach to the wall
+                // because they were still holding "Fire2" :(
+
+                break;
+
+            case PlayerState.ON_WALL:
+
+                // If the player is moving towards the wall
+                if (xInput != 0 && !wallGrab)
+                {
+                    // Slide down the wall
+                    wallSlide = true;
+                    WallSlide();
+                }
+
+                // Condition: Drop off wall into IDLE state if player is on ground or player is not on wall
+                if (coll.onGround || !coll.onWall)
+                    SetState(PlayerState.IDLE);
+
+                // Condition: Drop off wall into RUNNING state if player inputs away from the wall
+                if (coll.wallSide == Mathf.Sign(xInput))
+                    SetState(PlayerState.RUNNING);
+
+                // Condition: If player wants to jump and has not yet wall jumped, go to WALL_JUMPING state
+                if(jumpInput && !wallJumped)
+                {
+                    SetState(PlayerState.WALL_JUMPING);
+                }
+
+                break;
 
             case PlayerState.JUMPING:
                 
@@ -384,7 +394,7 @@ public class Movement : MonoBehaviour
             side *= -1;
             anim.Flip(side);
         }
-
+        
         // Disable movement while wall jumping
         StopCoroutine(DisableMovement(0));
         StartCoroutine(DisableMovement(.1f));
@@ -437,7 +447,7 @@ public class Movement : MonoBehaviour
         }
     }
 
-    private void Jump(Vector2 dir, bool wall)
+    private void Jump(Vector2 dir, bool wall = false)
     {
         rb.velocity = new Vector2(rb.velocity.x, 0);
         rb.velocity += dir * jumpForce;
