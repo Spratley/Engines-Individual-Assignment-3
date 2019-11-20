@@ -11,7 +11,12 @@ public enum PlayerState
 {
     IDLE,
     RUNNING,
-    CLIMBING
+    CLIMBING,
+    ON_WALL,
+    JUMPING,
+    FALLING,
+    DASHING,
+    WALL_JUMPING
 }
 
 // Other states to consider: ON_WALL, JUMPING, FALLING, DASHING, WALL_JUMPING
@@ -67,6 +72,7 @@ public class Movement : MonoBehaviour
     private float xRaw;
     private float yRaw;
     private Vector2 inputDirection;
+    private bool jumpInput;
 
     private void SetInputVariables()
     {
@@ -75,6 +81,7 @@ public class Movement : MonoBehaviour
         xRaw = Input.GetAxisRaw("Horizontal");
         yRaw = Input.GetAxisRaw("Vertical");
         inputDirection = new Vector2(xInput, yInput);
+        jumpInput = Input.GetButtonDown("Jump");
     }
 
     // Start is called before the first frame update
@@ -100,14 +107,13 @@ public class Movement : MonoBehaviour
 
         // Use the statemachine
         StateMachine(currentState);
-
     
         // Can enter the climbing state from any state
         // You may want to move this depending on the states you add
         if (coll.onWall && Input.GetButton("Fire2") && canMove)
         {
             // Change state
-            currentState = PlayerState.CLIMBING;
+            SetState(PlayerState.CLIMBING);
 
             // Flips sprite based on which wall
             if(side != coll.wallSide)
@@ -164,23 +170,6 @@ public class Movement : MonoBehaviour
         if (!coll.onWall || coll.onGround)
             wallSlide = false;
 
-        // Jump when hitting the space bar
-        if (Input.GetButtonDown("Jump"))
-        {
-            // Sets the jump animation
-            anim.SetTrigger("jump");
-
-            // What states can you jump from?
-
-            // Maybe move to IDLE and/or RUNNING
-            if (coll.onGround)
-                Jump(Vector2.up, false);
-
-            // Maybe move to an ON_WALL state
-            if (coll.onWall && !coll.onGround)
-                WallJump();
-        }
-
         // If left click and if dash is not on cooldown
         if (Input.GetButtonDown("Fire1") && !hasDashed)
         {
@@ -229,6 +218,7 @@ public class Movement : MonoBehaviour
 
     private void StateMachine(PlayerState state)
     {
+        
         // This is where the code for each state goes
         switch (state)
         {
@@ -237,8 +227,12 @@ public class Movement : MonoBehaviour
                 // Condition: Horizontal input, go to RUNNING state
                 if(xInput > 0.01f || xInput < -0.01f)
                 {
-                    currentState = PlayerState.RUNNING;
+                    SetState(PlayerState.RUNNING);
                 }
+
+                // Condition: Wants to jump and is on ground, goto JUMPING state
+                if (coll.onGround && jumpInput)
+                    SetState(PlayerState.JUMPING);
 
             break;
 
@@ -251,10 +245,12 @@ public class Movement : MonoBehaviour
                 // Condition: No horizontal input, go to IDLE state
                 if(xInput <= 0.01f || xInput >= 0.01f)
                 {
-                    currentState = PlayerState.IDLE;
+                    SetState(PlayerState.IDLE);
                 }
 
-            break;
+                if (coll.onGround && jumpInput)
+                    SetState(PlayerState.JUMPING);
+                break;
             
             case PlayerState.CLIMBING:
             
@@ -275,7 +271,7 @@ public class Movement : MonoBehaviour
                 if (!coll.onWall || !Input.GetButton("Fire2"))
                 {
                     // Change state to default
-                    currentState = PlayerState.IDLE;
+                    SetState(PlayerState.IDLE);
             
                     // Reset Gravity
                     rb.gravityScale = 3;
@@ -283,9 +279,30 @@ public class Movement : MonoBehaviour
         
             break;
 
-            // More states here pls
+            case PlayerState.JUMPING:
+                
+                //Jump into the air and return control to the player
+                anim.SetTrigger("jump");
+                Jump(Vector2.up, false);
+                SetState(PlayerState.IDLE);
+                
+                break;
 
+            case PlayerState.WALL_JUMPING:
+
+                //Jump off the wall and return control to the player
+                anim.SetTrigger("jump");
+                WallJump();
+                SetState(PlayerState.IDLE);
+                break;
         }
+    }
+
+    //This function is called once to change the state
+    //It can be used similar to Unity's Start() function
+    void SetState(PlayerState newState)
+    {
+        currentState = newState;
     }
 
     void GroundTouch()
@@ -437,5 +454,4 @@ public class Movement : MonoBehaviour
     {
         rb.drag = x;
     }
-
 }
