@@ -124,6 +124,13 @@ public class Movement : MonoBehaviour
             wallSlide = false;
         }
 
+        // Can enter the DASHING state from any state
+        // If left click and if dash is not on cooldown
+        if (Input.GetButtonDown("Fire1") && !hasDashed)
+        {
+            SetState(PlayerState.DASHING);
+        }
+
         // Used when no longer on a wall
         if (Input.GetButtonUp("Fire2") || !coll.onWall || !canMove)
         {
@@ -131,17 +138,7 @@ public class Movement : MonoBehaviour
             wallSlide = false;
         }
 
-        // If left click and if dash is not on cooldown
-        if (Input.GetButtonDown("Fire1") && !hasDashed)
-        {
-            // As long as there is some directional input
-            if(xRaw != 0 || yRaw != 0)
-
-                // Dash using raw input values
-                Dash(xRaw, yRaw);
-        }
         
-
         // When you land on the ground
         if (coll.onGround && !groundTouch)
         {   
@@ -155,7 +152,6 @@ public class Movement : MonoBehaviour
         {
             groundTouch = false;
         }
-
 
         // Return if on a wall
         if (wallGrab || wallSlide || !canMove)
@@ -188,6 +184,8 @@ public class Movement : MonoBehaviour
 
                 wallSlide = false;
 
+                anim.SetTrigger("idle");
+
                 // When on the ground and not dashing reset a few values
                 if (coll.onGround)
                 {
@@ -209,6 +207,10 @@ public class Movement : MonoBehaviour
                 if (coll.onWall && !coll.onGround)
                     SetState(PlayerState.ON_WALL);
 
+                if (!coll.onWall && !coll.onGround)
+                    SetState(PlayerState.FALLING);
+
+
             break;
 
             case PlayerState.RUNNING:
@@ -217,12 +219,16 @@ public class Movement : MonoBehaviour
 
                 // Use input direction to move and change the animation
                 Walk(inputDirection);
-                anim.SetHorizontalMovement(xInput, yInput, rb.velocity.y);
+                if(coll.onGround)
+                    anim.SetHorizontalMovement(xInput, yInput, rb.velocity.y);
             
-                // Condition: No horizontal input, go to IDLE state
+                // Condition: No horizontal input, go to IDLE state or FALLING state based on if grounded
                 if(xInput <= 0.01f || xInput >= 0.01f)
                 {
-                    SetState(PlayerState.IDLE);
+                    if (coll.onGround)
+                        SetState(PlayerState.IDLE);
+                    else
+                        SetState(PlayerState.FALLING);
                 }
 
                 if (coll.onGround && jumpInput)
@@ -294,7 +300,7 @@ public class Movement : MonoBehaviour
                 //Jump into the air and return control to the player
                 anim.SetTrigger("jump");
                 Jump(Vector2.up, false);
-                SetState(PlayerState.IDLE);
+                SetState(PlayerState.FALLING);
                 
                 break;
 
@@ -303,7 +309,38 @@ public class Movement : MonoBehaviour
                 //Jump off the wall and return control to the player
                 anim.SetTrigger("jump");
                 WallJump();
-                SetState(PlayerState.IDLE);
+                SetState(PlayerState.FALLING);
+
+                break;
+
+            case PlayerState.FALLING:
+                
+                wallSlide = false;
+
+                anim.SetTrigger("jump");
+
+                // Condition: Touching ground, go to IDLE state
+                if (coll.onGround)
+                    SetState(PlayerState.IDLE);
+
+                // Condition: Horizontal input, go to RUNNING state
+                if (xInput > 0.01f || xInput < -0.01f)
+                {
+                    SetState(PlayerState.RUNNING);
+                }
+
+                break;
+
+            case PlayerState.DASHING:
+
+                // As long as there is some directional input
+                if (xRaw != 0 || yRaw != 0)
+
+                    // Dash using raw input values
+                    Dash(xRaw, yRaw);
+
+                SetState(PlayerState.FALLING);
+
                 break;
         }
     }
