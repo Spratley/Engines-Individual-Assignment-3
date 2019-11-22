@@ -183,8 +183,7 @@ public class Movement : MonoBehaviour
             case PlayerState.IDLE:
 
                 wallSlide = false;
-
-                anim.SetTrigger("idle");
+                
 
                 // When on the ground and not dashing reset a few values
                 if (coll.onGround)
@@ -245,6 +244,8 @@ public class Movement : MonoBehaviour
                 rb.gravityScale = 0;
 
                 // Limit horizontal movement
+                anim.SetHorizontalMovement(0, yInput, rb.velocity.y);
+
                 if(xInput > .2f || xInput < -.2f)
                 {
                     rb.velocity = new Vector2(rb.velocity.x, 0);
